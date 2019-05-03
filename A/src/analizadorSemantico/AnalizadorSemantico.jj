@@ -1,0 +1,251 @@
+PARSER_BEGIN(AnalizadorSemantico)
+package  analizadorSemantico;
+
+import expresiones.Expresion;
+import expresiones.ExpresionAsignacion;
+import expresiones.ManejadorExpresiones;
+import expresiones.Nodo;
+import operadores.Operadores;
+import simbolos.Identificador;
+import simbolos.Literal;
+import simbolos.TablaDeSimbolos;
+import tiposDeDatos.*;
+import analizadorSintactico.CustomToken;
+
+import java.io.InputStream;
+
+public class AnalizadorSemantico{
+
+
+    private static TablaDeSimbolos tablaDeSimbolos;
+
+    public AnalizadorSemantico(TablaDeSimbolos tablaDeSimbolos,InputStream is){
+        this(is);
+        this.tablaDeSimbolos = tablaDeSimbolos;
+    }
+
+}
+
+PARSER_END(AnalizadorSemantico)
+/* Ignorados */
+SKIP: {" " | "\t" | "\r" | "\n" }
+
+/* Palabras Reservadas */
+TOKEN :
+{
+< MODIFICADOR: "private" | "public" >
+| < CLASE: "class" >
+| < TIPO: "boolean" | "int"  | "double" | "string">
+| < VOID: "void">
+| < SI: "if" >
+| < MIENTTRAS: "while" >
+}
+
+/* Separadores */
+TOKEN :
+{
+  < PARENTESIS_IZQ: "(" >
+| < PARENTESIS_DER: ")" >
+| < CORCHETE_IZQ: "{" >
+| < CORCHETE_DER: "}" >
+| < PUNTO_Y_COMA: ";" >
+| < COMA: "," >
+| < PUNTO: ".">
+}
+
+/* Operadores */
+TOKEN :
+{
+<NEGACION: "-">
+| < OPERADOR: <OPERADOR_LOGICO> | <OPERADOR_ARITMETICO> >
+| < ASIGNACION: "=" >
+| < OPERADOR_LOGICO: ">" | "<" | "==" | "<=" | ">=" | "!=" | "&&" | "||">
+| < OPERADOR_ARITMETICO: "+"|"*"|"/" >
+}
+
+TOKEN :
+{
+  <OPERADOR_UNARIO:  "!" >
+}
+
+/* Literales */
+TOKEN:
+{
+< LITERAL_ENTERA: ["0"-"9"](["0"-"9"])* >
+|< LITERAL_BOOLEANA: "false" | "true" >
+|< LITERAL_CADENA: ("\"" (~["\""])* "\"") >
+|< LITERAL_DOBLE: <LITERAL_ENTERA> <PUNTO> <LITERAL_ENTERA> >
+}
+
+
+/* simbolos.Identificador */
+TOKEN:
+{
+	< IDENTIFICADOR:["a"-"z","A"-"Z","_"](["a"-"z","A"-"Z","_","-","0"-"9"])* >
+}
+
+
+//------------ EMPIEZA ANALIZADOR SINTACTICO -------------------
+
+void analizar():{}{
+    <MODIFICADOR> <CLASE> <IDENTIFICADOR> <CORCHETE_IZQ> (ASM_expresion())* <CORCHETE_DER>
+}
+
+void ASM_declaracion_de_variable():{
+    Identificador identificador;
+    Token token;
+    Nodo res=null;
+}{
+    <MODIFICADOR>
+	<TIPO>
+	token = <IDENTIFICADOR>
+    {
+        CustomToken customToken = new CustomToken(token.image, token.beginLine,token.beginColumn,token.endLine,token.endColumn);
+        identificador = tablaDeSimbolos.obtenerIdentificador(customToken);
+    }
+	[ASM_asignacion(identificador)]
+}
+
+void ASM_asignacion(Identificador identificador):{
+    Nodo nodo;
+    Expresion expresion = new Expresion();
+
+}{
+    <ASIGNACION>
+    ASM_expresion_matematica(expresion)
+    {
+        ManejadorExpresiones.agregarExpresion(new ExpresionAsignacion(identificador,expresion));
+    }
+}
+
+void ASM_expresion_asignacion():{
+    Identificador identificador;
+    Token token;
+    Nodo res = null;
+}{
+     token = <IDENTIFICADOR>
+     {
+        CustomToken customToken = new CustomToken(token.image, token.beginLine,token.beginColumn,token.endLine,token.endColumn);
+        identificador = tablaDeSimbolos.obtenerIdentificador(customToken);
+     }
+    ASM_asignacion(identificador)
+}
+
+
+void ASM_valor(Expresion expresion):{
+    Nodo nodo;
+    Identificador identificador;
+    Literal literal;
+}{
+    identificador = ASM_buscar_variable()
+    {expresion.agregarNodo(identificador);}
+    |
+    literal = ASM_literal()
+    {expresion.agregarNodo(literal);}
+}
+
+Literal ASM_literal():{
+    Token token;
+    CustomToken customToken;
+}{
+    token = <LITERAL_BOOLEANA>
+    {
+       customToken = new CustomToken(token.image, token.beginLine,token.beginColumn,token.endLine,token.endColumn);
+      return new Literal(customToken,(new Booleano()).parseDato(token.image),new Booleano());
+    }
+    |
+    token = <LITERAL_ENTERA>
+    {
+       customToken = new CustomToken(token.image, token.beginLine,token.beginColumn,token.endLine,token.endColumn);
+      return new Literal(customToken,(new Entero()).parseDato(token.image),new Entero());
+    }
+    |
+    token = <LITERAL_DOBLE>
+    {
+       customToken = new CustomToken(token.image, token.beginLine,token.beginColumn,token.endLine,token.endColumn);
+      return new Literal(customToken,(new Doble()).parseDato(token.image),new Doble());
+    }
+    |
+    token = <LITERAL_CADENA>
+    {
+       customToken = new CustomToken(token.image, token.beginLine,token.beginColumn,token.endLine,token.endColumn);
+      return new Literal(customToken,(new Cadena()).parseDato(token.image),new Cadena());
+    }
+}
+
+Identificador ASM_buscar_variable():{
+    Token token;
+}{
+    token = <IDENTIFICADOR>
+    {
+        CustomToken customToken = new CustomToken(token.image, token.beginLine,token.beginColumn,token.endLine,token.endColumn);
+        return tablaDeSimbolos.obtenerIdentificador(customToken);
+    }
+}
+
+void ASM_expresion_matematica(Expresion expresion):{
+    Nodo nodo;
+}{
+    ASM_operando(expresion)
+    (
+        ASM_operador(expresion)
+        ASM_operando(expresion)
+    )*
+}
+
+void ASM_operador(Expresion expresion):{
+    Token token;
+}{
+    (
+      token = <NEGACION>
+    |
+      token = <OPERADOR>
+    )
+    {expresion.agregarNodo(Operadores.getOperador(token.image));}
+}
+
+void ASM_operando(Expresion expresion):{
+}{
+    ASM_valor(expresion)
+    |
+    <PARENTESIS_IZQ>
+      {expresion.aumentarPrecedencia(100);}
+      ASM_expresion_matematica(expresion)
+      {expresion.aumentarPrecedencia(-100);}
+    <PARENTESIS_DER>
+   |
+   ASM_operador_unario(expresion) ASM_operando(expresion)
+}
+
+void ASM_operador_unario(Expresion expresion):{}{
+  (
+    token = <OPERADOR_UNARIO>
+    |
+    token = <NEGACION>
+  )
+  {expresion.agregarNodo(Operadores.getOperadorUnario(token.image));}
+}
+
+void ASM_expresion():{}{
+	(( ASM_expresion_asignacion() | ASM_declaracion_de_variable() ) <PUNTO_Y_COMA>) | ASM_expresiones_bloque()
+}
+
+void ASM_expresiones_bloque():{}{
+    ASM_expresion_si() | ASM_expresion_mientras()
+}
+
+void ASM_expresion_si():{
+  Expresion expresion = new Expresion();
+}{
+	<SI> <PARENTESIS_IZQ> ASM_expresion_matematica(expresion) <PARENTESIS_DER> ASM_bloque()
+}
+
+void ASM_expresion_mientras():{
+  Expresion expresion = new Expresion();
+}{
+	<MIENTTRAS> <PARENTESIS_IZQ> ASM_expresion_matematica(expresion) <PARENTESIS_DER> ASM_bloque()
+}
+
+void ASM_bloque():{}{
+    <CORCHETE_IZQ> (ASM_expresion())* <CORCHETE_DER>
+}

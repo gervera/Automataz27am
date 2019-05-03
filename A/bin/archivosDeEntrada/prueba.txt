@@ -1,0 +1,15 @@
+public class triples {
+
+	public int a;
+	public int b;
+	public int c;
+	public int d;
+	
+	a = 4;
+	b = 3;
+	c = 2;
+	d = 6;
+	
+	a = (a + c)/(d - b);
+
+}

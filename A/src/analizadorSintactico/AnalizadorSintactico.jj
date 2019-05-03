@@ -1,0 +1,154 @@
+PARSER_BEGIN(AnalizadorSintactico)
+package  analizadorSintactico;
+
+import simbolos.TablaDeSimbolos;
+import simbolos.Variable;
+import tiposDeDatos.TipoDeDato;
+import tiposDeDatos.TiposDeDatos;
+
+import java.io.InputStream;
+
+public class AnalizadorSintactico{
+
+
+    private static TablaDeSimbolos tablaDeSimbolos;
+
+    public AnalizadorSintactico(TablaDeSimbolos tablaDeSimbolos,InputStream is){
+        this(is);
+        this.tablaDeSimbolos = tablaDeSimbolos;
+    }
+
+}
+
+PARSER_END(AnalizadorSintactico)
+/* Ignorados */
+SKIP: {" " | "\t" | "\r" | "\n" }
+
+/* Palabras Reservadas */
+TOKEN :
+{
+< MODIFICADOR: "private" | "public" >
+| < CLASE: "class" >
+| < TIPO: "boolean" | "int"  | "double" | "string">
+| < VOID: "void">
+| < SI: "if" >
+| < MIENTTRAS: "while" >
+}
+
+/* Separadores */
+TOKEN :
+{
+  < PARENTESIS_IZQ: "(" >
+| < PARENTESIS_DER: ")" >
+| < CORCHETE_IZQ: "{" >
+| < CORCHETE_DER: "}" >
+| < PUNTO_Y_COMA: ";" >
+| < COMA: "," >
+| < PUNTO: ".">
+}
+
+/* Operadores */
+TOKEN :
+{
+<NEGACION: "-">
+| < OPERADOR: <OPERADOR_LOGICO> | <OPERADOR_ARITMETICO> >
+| < ASIGNACION: "=" >
+| < OPERADOR_LOGICO: ">" | "<" | "==" | "<=" | ">=" | "!=" | "&&" | "||">
+| < OPERADOR_ARITMETICO: "+"|"*"|"/" >
+}
+
+TOKEN :
+{
+  <OPERADOR_UNARIO: "!" >
+}
+
+/* Literales */
+TOKEN:
+{
+< LITERAL: <LITERAL_DOBLE> | <LITERAL_CADENA> | <LITERAL_ENTERA> | <LITERAL_BOOLEANA> >
+|< LITERAL_ENTERA: ["0"-"9"](["0"-"9"])* >
+|< LITERAL_BOOLEANA: "false" | "true" >
+|< LITERAL_CADENA: ("\"" (~["\""])* "\"") >
+|< LITERAL_DOBLE: <LITERAL_ENTERA> <PUNTO> <LITERAL_ENTERA> >
+}
+
+
+/* simbolos.Identificador */
+TOKEN:
+{
+	< IDENTIFICADOR:["a"-"z","A"-"Z","_"](["a"-"z","A"-"Z","_","-","0"-"9"])* >
+}
+
+
+//------------ EMPIEZA ANALIZADOR SINTACTICO -------------------
+
+void analizar():{}{
+    <MODIFICADOR> <CLASE> <IDENTIFICADOR> <CORCHETE_IZQ> (AS_expresion())* <CORCHETE_DER>
+}
+
+void AS_declaracion_de_variable():{
+    Token token = null;
+    Token tokenTipoDatos = null;
+    Token tokenAlcance = null;
+    Variable variable;
+}{
+    tokenAlcance = <MODIFICADOR>
+	tokenTipoDatos  = <TIPO>
+	token           = <IDENTIFICADOR>
+    {
+        TipoDeDato tipoDeDato = TiposDeDatos.getTipoDeDato(tokenTipoDatos.image);
+        CustomToken customToken = new CustomToken(token.image, token.beginLine,token.beginColumn,token.endLine,token.endColumn);
+        variable = new Variable(customToken,token.image,tokenAlcance.image,tipoDeDato);
+        tablaDeSimbolos.agregarIdentificador(variable);
+    }
+	[AS_asignacion()]
+}
+
+void AS_asignacion():{}{
+    <ASIGNACION> AS_expresion_matematica()
+}
+
+void AS_expresion_asignacion():{}{
+    <IDENTIFICADOR> AS_asignacion()
+}
+
+void AS_valor():{}{
+     <IDENTIFICADOR> | <LITERAL>
+}
+
+
+void AS_expresion_matematica():{}{
+    AS_Operando() (AS_Operador() AS_Operando())*
+}
+
+void AS_Operando():{}{
+    AS_valor() | <PARENTESIS_IZQ> AS_expresion_matematica() <PARENTESIS_DER> | AS_operador_unario() AS_Operando()
+}
+
+void AS_Operador():{}{
+  <OPERADOR> | <NEGACION>
+}
+
+void AS_operador_unario():{}{
+  <OPERADOR_UNARIO> | <NEGACION>
+}
+
+void AS_expresion():{}{
+	(( AS_expresion_asignacion() | AS_declaracion_de_variable() ) <PUNTO_Y_COMA>) | AS_expresiones_bloque()
+}
+
+void AS_expresiones_bloque():{}{
+    AS_expresion_si() | AS_expresion_mientras()
+}
+
+void AS_expresion_si():{}{
+	<SI> <PARENTESIS_IZQ> AS_expresion_matematica() <PARENTESIS_DER> AS_bloque()
+}
+
+void AS_expresion_mientras():{}{
+	<MIENTTRAS> <PARENTESIS_IZQ> AS_expresion_matematica() <PARENTESIS_DER> AS_bloque()
+}
+
+void AS_bloque():{}{
+    <CORCHETE_IZQ> (AS_expresion())* <CORCHETE_DER>
+}
